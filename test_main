@@ -1,0 +1,100 @@
+import os
+import logging
+
+
+from aiogram import Bot, Dispatcher, executor, types
+from aiogram.dispatcher.filters.state import State, StatesGroup
+from aiogram.contrib.fsm_storage.memory import MemoryStorage
+from aiogram.dispatcher import FSMContext
+import aiohttp
+
+import keyboard as kb
+import plans_budget as wr
+
+API_TOKEN = '1585015132:AAE9NvQ6p94wRi5I9-oj5mC-v26fVXgku2Y' #Токен другого бота'1580722050:AAHOzn6zOD8t8IS5_a1NxvgxN7pKIPUJl7Y'
+
+# Лог
+logging.basicConfig(level=logging.INFO)
+storage = MemoryStorage()
+# Ініціалізація бота 
+bot = Bot(token=API_TOKEN)
+dp = Dispatcher(bot, storage=storage)
+
+class Form(StatesGroup):
+    plan_msg = State() 
+
+
+#################################################################
+
+@dp.message_handler(commands=['start'])
+async def send_welcome(message: types.Message):
+    await message.answer(
+        "Привіт!👋\n"
+        "Бот Планер/Фінансовий помічник\n\n"
+        "Доступні наступні функції:\n"  
+        "1)Плани\n"
+        "2)Витрати\n", reply_markup=kb.menu_kb)
+
+@dp.message_handler(commands=['love'])
+async def send_love(message: types.Message):
+    await message.reply("Роман дурний любит Наташку", reply=False)
+
+#if-else меню, для розпізнавання команд
+@dp.message_handler(content_types=['text'])
+async def mes(message: types.Message):
+    get_message_bot = message.text
+    if(get_message_bot == 'Плани📝'):
+        await message.answer("Дія:\n1)Запланувати\n2)Переглянути плани", reply_markup=kb.plans_kb)   
+    elif(get_message_bot == "Витрати"):
+        await message.reply("Дія:\n1)Додати\n2)Статистика за сьогодні", reply=False)
+    elif(get_message_bot == "Меню🍻"):
+        await send_welcome(message)
+    elif(get_message_bot == "Запланувати"):
+        await create_plans(message)
+    elif(get_message_bot == "Переглянути плани"):
+        await show_plans(message)
+    else:
+        await message.reply("Я не розумію цю команду!", reply=False)
+##################################################################
+    
+@dp.message_handler(commands=['show_p'])
+async def show_plans(message: types.Message):
+    string = wr.show_plans()
+    await message.reply(string, reply_markup=kb.justMenu_kb)
+
+
+@dp.message_handler( commands=['create_p'])
+async def create_plans(message: types.Message):
+    await Form.plan_msg.set()
+    await message.answer('Введіть ваші справи на сьогодні через новий рядок\n\nНаприклад:\nПоприбирати в кімнаті\nПідготуватися до екзамену', reply_markup=types.ReplyKeyboardRemove())
+    
+
+@dp.message_handler(state=Form.plan_msg)
+async def process_plan(message: types.Message, state: FSMContext):
+    async with state.proxy() as data:
+
+        data = message.text 
+        await Form.next()
+        wr.create_plans(data)
+        await message.reply('Чудово!')
+        
+        await send_welcome(message)
+
+
+@dp.message_handler(commands=['plans']) #команда "плани", через яку ми бачимо можливості бота в планах
+async def make_plans(message: types.Message):
+    await message.answer("Дія:\n1)Запланувати - /create_p\n2)Плани - /show_p")
+
+
+#@dp.message_handler(commands=['1']) 
+#async def smake_plans(message: types.Message):
+#    await message.reply("Плани", reply_markup=kb.menu_kb)
+
+#@dp.callback_query_handler(lambda  c: c.data == 'plans1')
+#async def process_callback_plans(callback_querry: types.CallbackQuery):
+#    await bot.answer_callback_query(callback_querry.id)
+#    await bot.send_message(callback_querry.from_user.id, 'Нажата первая кнопка!')
+
+
+if __name__ == '__main__':
+    executor.start_polling(dp, skip_updates=True)
